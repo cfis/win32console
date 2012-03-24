@@ -1,3 +1,4 @@
+#define _WINSOCKAPI_ 
 #include <windows.h>
 #include "ruby.h"
 
@@ -34,6 +35,7 @@ VALUE
 rb_getWin32Error()
 {
    LPVOID lpMsgBuf;
+   VALUE t;
    if (!FormatMessage( 
 		      FORMAT_MESSAGE_ALLOCATE_BUFFER | 
 		      FORMAT_MESSAGE_FROM_SYSTEM | 
@@ -49,7 +51,7 @@ rb_getWin32Error()
       return Qnil;
    }
 
-   VALUE t = rb_str_new2( (LPCTSTR) lpMsgBuf );
+   t = rb_str_new2( (LPCTSTR) lpMsgBuf );
    
    // Free the buffer.
    LocalFree( lpMsgBuf );
@@ -64,6 +66,7 @@ rb_getWin32Error()
 static VALUE rb_GetStdHandle(VALUE self, VALUE handle)
 {
    unsigned long x;
+   unsigned long h;
    if ( FIXNUM_P( handle ) )
    {
       x = NUM2ULONG( handle );
@@ -73,7 +76,7 @@ static VALUE rb_GetStdHandle(VALUE self, VALUE handle)
       Check_Type( handle, T_BIGNUM );
       x = rb_big2ulong(handle);
    }
-   unsigned long h = PtrToUlong( GetStdHandle( x ) );
+   h = PtrToUlong( GetStdHandle( x ) );
    return ULONG2NUM(h);
 }
 
@@ -240,13 +243,13 @@ static VALUE rb_GetLargestConsoleWindowSize( VALUE self, VALUE hConsoleOutput )
 
 static VALUE rb_GetConsoleCursorInfo( VALUE self, VALUE hConsoleOutput )
 {
+   VALUE ret = rb_ary_new();
    HANDLE handle = ULongToPtr( NUM2ULONG( hConsoleOutput ) );
    
    CONSOLE_CURSOR_INFO out;
    if ( !GetConsoleCursorInfo( handle, &out ) )
       return rb_getWin32Error();
    
-   VALUE ret = rb_ary_new();
    rb_ary_push( ret, UINT2NUM( out.dwSize ) );
    rb_ary_push( ret, UINT2NUM( out.bVisible ) );
    return ret;
@@ -310,6 +313,7 @@ void rb_ParseEvent(VALUE ret, INPUT_RECORD *event )
 
 static VALUE rb_PeekConsoleInput( VALUE self, VALUE hConsoleOutput )
 {
+   VALUE ret = rb_ary_new();
    HANDLE handle = ULongToPtr( NUM2ULONG( hConsoleOutput ) );
    
    DWORD nofread;
@@ -317,7 +321,6 @@ static VALUE rb_PeekConsoleInput( VALUE self, VALUE hConsoleOutput )
    if (!PeekConsoleInput(handle,&event,1,&nofread))
       return rb_getWin32Error();
    
-   VALUE ret = rb_ary_new();
    rb_ParseEvent( ret, &event );
    return ret;
 }
@@ -327,8 +330,8 @@ static VALUE rb_ReadConsole( VALUE self, VALUE hConsoleOutput,
 {
    HANDLE handle = ULongToPtr( NUM2ULONG( hConsoleOutput ) );
    DWORD nofread;
-   Check_Type( buffer, T_STRING );
    int to_read = NUM2INT(numread);
+   Check_Type( buffer, T_STRING );
    if ( RSTRING_LEN(buffer) > to_read )
       rb_raise(rb_eArgError, "String is too small to read that many characters.");
    if (ReadConsole(handle,(void *)RSTRING_PTR(buffer), to_read,
@@ -339,13 +342,13 @@ static VALUE rb_ReadConsole( VALUE self, VALUE hConsoleOutput,
 
 static VALUE rb_ReadConsoleInput( VALUE self, VALUE hConsoleOutput )
 {
+   VALUE ret = rb_ary_new();
    HANDLE handle = ULongToPtr( NUM2ULONG( hConsoleOutput ) );
    DWORD nofread;
    INPUT_RECORD event;
    if (!ReadConsoleInput(handle,&event,1,&nofread))
       return rb_getWin32Error();
    
-   VALUE ret = rb_ary_new();
    rb_ParseEvent( ret, &event );
    return ret;
 }
@@ -359,9 +362,9 @@ static VALUE rb_ReadConsoleOutputCharacter( VALUE self, VALUE hConsoleOutput,
    HANDLE handle = ULongToPtr( NUM2ULONG( hConsoleOutput ) );
    COORD coords;
    DWORD nofread;
+   int l = NUM2INT(len);
    coords.X= NUM2UINT( x );
    coords.Y= NUM2UINT( y );
-   int l = NUM2INT(len);
    if ( (unsigned long)RSTRING_LEN(charbuf) < l*sizeof(TCHAR) )
       rb_raise(rb_eArgError, "String is too small to read that many characters.");
    if (ReadConsoleOutputCharacter(handle,RSTRING_PTR(charbuf),l,
@@ -400,9 +403,11 @@ static VALUE rb_ReadConsoleOutput( VALUE self, VALUE hConsoleOutput,
 				   VALUE startx, VALUE starty,
 				   VALUE l, VALUE t, VALUE r, VALUE b )
 {
+   VALUE ret = rb_ary_new();
    COORD coords;
    COORD size;
    SMALL_RECT from;
+   HANDLE handle = ULongToPtr( NUM2ULONG( hConsoleOutput ) );
    size.X= NUM2UINT( srcwid );
    size.Y= NUM2UINT( srcht );
    coords.X= NUM2INT( startx );
@@ -414,11 +419,9 @@ static VALUE rb_ReadConsoleOutput( VALUE self, VALUE hConsoleOutput,
    Check_Type( buffer, T_STRING );
    if ( (unsigned long)RSTRING_LEN(buffer) < (sizeof(CHAR_INFO)*size.X*size.Y) )
       rb_raise(rb_eArgError, "string buffer is too small for reading that many characters.");
-   HANDLE handle = ULongToPtr( NUM2ULONG( hConsoleOutput ) );
    if (!ReadConsoleOutput(handle,(CHAR_INFO *)RSTRING_PTR(buffer),size,coords,&from))
       return rb_getWin32Error();
 
-   VALUE ret = rb_ary_new();
    rb_ary_push( ret, INT2FIX(from.Left) );
    rb_ary_push( ret, INT2FIX(from.Top) );
    rb_ary_push( ret, INT2FIX(from.Right) );
@@ -430,6 +433,7 @@ static VALUE rb_ReadConsoleOutput( VALUE self, VALUE hConsoleOutput,
 
 static VALUE rb_GetConsoleScreenBufferInfo( VALUE self, VALUE hConsoleOutput )
 {
+   VALUE ret = rb_ary_new();
    HANDLE handle = ULongToPtr( NUM2ULONG( hConsoleOutput ) );
 
    CONSOLE_SCREEN_BUFFER_INFO out;
@@ -437,7 +441,6 @@ static VALUE rb_GetConsoleScreenBufferInfo( VALUE self, VALUE hConsoleOutput )
    if ( !GetConsoleScreenBufferInfo( handle, &out ) )
       return rb_getWin32Error();
 
-   VALUE ret = rb_ary_new();
    rb_ary_push( ret, UINT2NUM( out.dwSize.X ) );
    rb_ary_push( ret, UINT2NUM( out.dwSize.Y ) );
    rb_ary_push( ret, UINT2NUM( out.dwCursorPosition.X ) );
@@ -815,10 +818,10 @@ rb_FillConsoleOutputAttribute( VALUE self, VALUE hConsoleOutput,
 {
    HANDLE handle = ULongToPtr( NUM2ULONG( hConsoleOutput ) );
 
+   DWORD numChars;
    COORD dwWriteCoord;
    dwWriteCoord.X = NUM2UINT(col);
    dwWriteCoord.Y = NUM2UINT(row);
-   DWORD numChars;
    if (FillConsoleOutputAttribute( handle, NUM2UINT(wAttribute),
 				   NUM2ULONG(nLength), dwWriteCoord,
 				   &numChars ))
@@ -938,6 +941,8 @@ rb_ScrollConsoleScreenBuffer( VALUE self, VALUE hConsoleOutput, VALUE left1,
 {
    HANDLE handle = ULongToPtr( NUM2ULONG( hConsoleOutput ) );
    
+   CHAR_INFO fill;
+   COORD origin;
    SMALL_RECT scroll, clip;
    scroll.Left   = NUM2INT( left1 );
    scroll.Right  = NUM2INT( right1 );
@@ -947,14 +952,12 @@ rb_ScrollConsoleScreenBuffer( VALUE self, VALUE hConsoleOutput, VALUE left1,
    clip.Right  = NUM2INT( right2 );
    clip.Top    = NUM2INT( top2 );
    clip.Bottom = NUM2INT( bottom2 );
-   CHAR_INFO fill;
 #ifdef UNICODE
    fill.Char.UnicodeChar = NUM2CHR( cChar );
 #else
    fill.Char.AsciiChar = NUM2CHR( cChar );
 #endif
    fill.Attributes = NUM2INT(attr);
-   COORD origin;
    origin.X = NUM2UINT( col );
    origin.Y = NUM2UINT( row );
    
@@ -972,10 +975,10 @@ rb_FillConsoleOutputCharacter( VALUE self, VALUE hConsoleOutput,
 {
    HANDLE handle = ULongToPtr( NUM2ULONG( hConsoleOutput ) );
 
+   DWORD numChars;
    COORD dwWriteCoord;
    dwWriteCoord.X = NUM2UINT(col);
    dwWriteCoord.Y = NUM2UINT(row);
-   DWORD numChars;
    if (FillConsoleOutputCharacter( handle, NUM2CHR(cCharacter),
 				   NUM2ULONG(nLength), dwWriteCoord,
 				   &numChars ))
@@ -987,13 +990,16 @@ rb_FillConsoleOutputCharacter( VALUE self, VALUE hConsoleOutput,
 VALUE
 rb_WriteConsoleInput(int argc, VALUE *argv, VALUE self)
 {
+   HANDLE handle;
+   WORD type;
+   DWORD written;
+   INPUT_RECORD event;
+
    if (argc < 3)
       rb_raise(rb_eArgError, "Wrong number of arguments.");
    
-   HANDLE handle = ULongToPtr( NUM2ULONG( argv[0] ) );
-   WORD type = NUM2INT( argv[1] );
-   DWORD written;
-   INPUT_RECORD event;
+   handle = ULongToPtr( NUM2ULONG( argv[0] ) );
+   type = NUM2INT( argv[1] );
    event.EventType = type;
    switch(event.EventType) {
       case KEY_EVENT:
@@ -1016,10 +1022,11 @@ rb_WriteConsoleInput(int argc, VALUE *argv, VALUE self)
 	 }
     case MOUSE_EVENT:
        {
+	  MOUSE_EVENT_RECORD* mevent = NULL;
 	  if (argc < 7)
 	     rb_raise(rb_eArgError, "Wrong number of arguments.");
 	
-	  MOUSE_EVENT_RECORD* mevent=(MOUSE_EVENT_RECORD *)&(event.Event);
+	  mevent=(MOUSE_EVENT_RECORD *)&(event.Event);
 	  mevent->dwMousePosition.X=NUM2UINT( argv[2] );
 	  mevent->dwMousePosition.Y=NUM2UINT( argv[3] );
 	  mevent->dwButtonState=NUM2UINT( argv[4] );
@@ -1029,27 +1036,29 @@ rb_WriteConsoleInput(int argc, VALUE *argv, VALUE self)
        }
       case WINDOW_BUFFER_SIZE_EVENT:
 	 {
-	    if (argc < 4)
+	    WINDOW_BUFFER_SIZE_RECORD* mevent = NULL;
+		if (argc < 4)
 	       rb_raise(rb_eArgError, "Wrong number of arguments.");
-	    WINDOW_BUFFER_SIZE_RECORD* mevent=
-	    (WINDOW_BUFFER_SIZE_RECORD *)&(event.Event);
+	    mevent = (WINDOW_BUFFER_SIZE_RECORD *)&(event.Event);
 	    mevent->dwSize.X = NUM2UINT( argv[2] );
 	    mevent->dwSize.Y = NUM2UINT( argv[3] );
 	 }
 	 break;
       case MENU_EVENT:
 	 {
+	    MENU_EVENT_RECORD* mevent = NULL;
 	    if (argc < 3)
 	       rb_raise(rb_eArgError, "Wrong number of arguments.");
-	    MENU_EVENT_RECORD* mevent= (MENU_EVENT_RECORD *)&(event.Event);
+	    mevent= (MENU_EVENT_RECORD *)&(event.Event);
 	    mevent->dwCommandId = argv[2];
 	 }
 	 break;
       case FOCUS_EVENT:
 	 {
+	    FOCUS_EVENT_RECORD* mevent = NULL;
 	    if (argc < 3)
 	       rb_raise(rb_eArgError, "Wrong number of arguments.");
-	    FOCUS_EVENT_RECORD* mevent= (FOCUS_EVENT_RECORD *)&(event.Event);
+	    mevent= (FOCUS_EVENT_RECORD *)&(event.Event);
 	    mevent->bSetFocus = NUM2UINT( argv[2] );
 	 }
     default:
@@ -1098,18 +1107,20 @@ rb_WriteConsoleOutputAttribute(VALUE self, VALUE h, VALUE s,
 			       VALUE x, VALUE y)
 {
 
-    HANDLE handle = ULongToPtr( NUM2ULONG( h ) );
-    Check_Type( s, T_STRING );
-    
     unsigned short buffer[80*999*sizeof(unsigned short)];
+    HANDLE handle = ULongToPtr( NUM2ULONG( h ) );
     DWORD written;
-    DWORD towrite = RSTRING_LEN(s);
+    DWORD towrite;
     unsigned i = 0;
+    COORD coords;
+
+	Check_Type( s, T_STRING );
+    
+    towrite = RSTRING_LEN(s);
 
     for(i=0; i<towrite; i++) {
         buffer[i] = (unsigned short)(RSTRING_PTR(s)[i]);
     }
-    COORD coords;
     coords.X=NUM2INT( x );
     coords.Y=NUM2INT( y );
     if (WriteConsoleOutputAttribute(handle,(const unsigned short *)&buffer,
@@ -1124,12 +1135,11 @@ VALUE
 rb_WriteConsoleOutputCharacter(VALUE self, VALUE h, VALUE s,
 			       VALUE x, VALUE y)
 {
-
     HANDLE handle = ULongToPtr( NUM2ULONG( h ) );
-    Check_Type( s, T_STRING );
-    
     DWORD written;
     COORD coords;
+    Check_Type( s, T_STRING );
+    
     coords.X=NUM2INT( x );
     coords.Y=NUM2INT( y );
     if (WriteConsoleOutputCharacter(handle,(LPCTSTR)RSTRING_PTR(s),
