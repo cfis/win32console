@@ -2,9 +2,8 @@
 
 Gem::Specification.new do |s|
   s.name = "win32console"
-  s.version = "1.3"
+  s.version = "1.3.0"
 
-  s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Gonzalo Garramuno", "Justin Bailey", "Luis Lavena"]
   s.date = "2012-03-24"
   s.description =<<-EOS
